@@ -180,7 +180,7 @@
             playlistEl.innerHTML = '';
             
             if (tracks.length === 0) {
-                playlistEl.innerHTML = '<p class="text-gray-500 text-sm text-center mt-8">No tracks added. Click the + button to add local audio files.</p>';
+                playlistEl.innerHTML = '<p class="text-gray-500 text-sm text-center mt-8">No tracks left. Click the + button to add local audio files.</p>';
                 return;
             }
 
@@ -191,24 +191,88 @@
                 const icon = (isActive && isPlaying) ? 'fa-chart-simple text-indigo-400' : 'fa-music text-gray-400';
                 
                 const el = document.createElement('div');
-                el.className = `p-3 rounded-lg flex items-center cursor-pointer transition-colors duration-200 border-l-2 ${activeClasses}`;
-                el.onclick = () => {
-                    currentIndex = index;
-                    loadTrack(currentIndex);
-                    playTrack();
-                };
+                el.className = `p-3 rounded-lg flex items-center transition-colors duration-200 border-l-2 ${activeClasses} group`;
                 
                 el.innerHTML = `
-                    <div class="w-10 h-10 bg-gray-950 rounded flex items-center justify-center flex-shrink-0 mr-3 shadow-inner">
+                    <div class="w-10 h-10 bg-gray-950 rounded flex items-center justify-center flex-shrink-0 mr-3 shadow-inner cursor-pointer track-trigger">
                         <i class="fas ${icon} text-sm"></i>
                     </div>
-                    <div class="overflow-hidden flex-1">
+                    <div class="overflow-hidden flex-1 cursor-pointer track-trigger">
                         <h4 class="text-sm truncate ${textClasses}">${track.title}</h4>
                         <p class="text-xs text-gray-500 truncate">${track.artist}</p>
                     </div>
+                    <button class="remove-btn text-gray-600 hover:text-red-500 p-2 transition focus:outline-none opacity-0 group-hover:opacity-100" title="Remove Track">
+                        <i class="fas fa-trash-alt text-sm"></i>
+                    </button>
                 `;
+
+                // Handle click to play
+                const triggers = el.querySelectorAll('.track-trigger');
+                triggers.forEach(trigger => {
+                    trigger.addEventListener('click', () => {
+                        currentIndex = index;
+                        loadTrack(currentIndex);
+                        playTrack();
+                    });
+                });
+
+                // Handle click to remove
+                const removeBtn = el.querySelector('.remove-btn');
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeTrack(index);
+                });
+
                 playlistEl.appendChild(el);
             });
+        }
+
+        function removeTrack(index) {
+            const isCurrentTrack = index === currentIndex;
+            
+            // Clean up Object URL if it's a local file to free memory
+            if (tracks[index].src.startsWith('blob:')) {
+                URL.revokeObjectURL(tracks[index].src);
+            }
+            
+            tracks.splice(index, 1);
+            
+            if (tracks.length === 0) {
+                // Handle empty playlist state
+                audio.pause();
+                audio.src = '';
+                isPlaying = false;
+                playIcon.className = 'fas fa-play ml-1 text-lg';
+                miniDisc.classList.remove('animate-spin');
+                currentTitle.textContent = 'Select a track';
+                currentArtist.textContent = 'Artist';
+                playerTitle.textContent = 'No track';
+                playerArtist.textContent = '-';
+                timeCurrent.textContent = '0:00';
+                timeTotal.textContent = '0:00';
+                progressBar.style.width = '0%';
+                currentIndex = 0;
+            } else {
+                // Adjust index if we removed a track before the current one
+                if (index < currentIndex) {
+                    currentIndex--;
+                } 
+                // If we removed the currently playing track, move to the next one
+                else if (isCurrentTrack) {
+                    if (currentIndex >= tracks.length) {
+                        currentIndex = 0;
+                    }
+                    loadTrack(currentIndex);
+                    if (isPlaying) {
+                        playTrack();
+                    } else {
+                        pauseTrack(); 
+                    }
+                }
+            }
+            
+            updateTrackCount();
+            renderPlaylist();
         }
 
         function loadTrack(index) {
